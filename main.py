@@ -36,6 +36,11 @@ def _is_reflection(payload, response_text, baseline_text):
     reflection. The mere presence of a script, img, or svg tag in a
     page is never a finding.
     """
+    # The comparison is verbatim. A payload reflected back HTML
+    # escaped or URL encoded does not equal the string I sent, so this
+    # counts it as no reflection. That is the safe direction for a
+    # reflected verdict, but it also means stored or encoded cases go
+    # unreported rather than flagged for a closer look.
     return payload in response_text and payload not in baseline_text
 
 def inject_payloads(url, payloads):
@@ -80,6 +85,10 @@ def inject_payloads(url, payloads):
 
 
                     try:
+                        # An error status skips the reflection test
+                        # entirely, here and in the form posts below. A
+                        # page that reflects the payload on its 400 or
+                        # 500 error page is never counted.
                         response = requests.get(new_url, timeout=REQUEST_TIMEOUT)
                         response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
                         succeeded += 1
@@ -109,6 +118,9 @@ def inject_payloads(url, payloads):
                 action = urllib.parse.urljoin(url, action_attr) if action_attr else url
                 method = form.get('method', 'GET').upper()
 
+                # Only input elements are tested. Textarea and select
+                # fields, which are common places for stored comments
+                # and profiles, are never given a payload.
                 inputs = form.find_all('input')
                 data = {}
 
