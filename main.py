@@ -61,7 +61,7 @@ def inject_payloads(url, payloads):
     try:
         # Check URL parameters
         parsed_url = urllib.parse.urlparse(url)
-        query_params = urllib.parse.parse_qs(parsed_url.query)
+        query_params = urllib.parse.parse_qs(parsed_url.query, keep_blank_values=True)
 
         if query_params:
             # Baseline: the same URL with its original parameter values.
@@ -116,7 +116,12 @@ def inject_payloads(url, payloads):
                 # becomes a full URL for the page's own origin.
                 action_attr = form.get('action')
                 action = urllib.parse.urljoin(url, action_attr) if action_attr else url
-                method = form.get('method', 'GET').upper()
+                method = (form.get('method') or 'GET').upper()
+                if method not in ('GET', 'POST'):
+                    # An empty or unsupported method defaults to GET,
+                    # as it does in a browser, so the baseline request
+                    # and the payload requests use the same method.
+                    method = 'GET'
 
                 # Only input elements are tested. Textarea and select
                 # fields, which are common places for stored comments
@@ -201,8 +206,9 @@ def main():
         logging.error("URL is required.")
         sys.exit(1)
 
-    if not args.url.startswith("http://") and not args.url.startswith("https://"):
-        logging.error("URL must start with http:// or https://")
+    parsed_target = urllib.parse.urlparse(args.url)
+    if parsed_target.scheme not in ("http", "https") or not parsed_target.netloc:
+        logging.error("Invalid URL provided. URL must start with http:// or https:// and include a host.")
         sys.exit(1)
 
     payloads_to_use = args.payloads if args.payloads else XSS_PAYLOADS
